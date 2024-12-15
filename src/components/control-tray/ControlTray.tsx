@@ -29,7 +29,17 @@ export type ControlTrayProps = {
   videoRef: RefObject<HTMLVideoElement>;
   children?: ReactNode;
   supportsVideo: boolean;
+  supportsScreenShare: boolean;
   onVideoStreamChange?: (stream: MediaStream | null) => void;
+  onError?: (error: Error) => void;
+};
+
+
+// 添加设备检测函数
+const isMobileDevice = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
 };
 
 type MediaStreamButtonProps = {
@@ -38,22 +48,23 @@ type MediaStreamButtonProps = {
   offIcon: string;
   start: () => Promise<any>;
   stop: () => any;
+  disabled?: boolean; // 添加 disabled 属性
 };
 
 /**
  * button used for triggering webcam or screen-capture
  */
 const MediaStreamButton = memo(
-  ({ isStreaming, onIcon, offIcon, start, stop }: MediaStreamButtonProps) =>
+  ({ isStreaming, onIcon, offIcon, start, stop, disabled }: MediaStreamButtonProps) =>
     isStreaming ? (
       <button className="action-button" onClick={stop}>
         <span className="material-symbols-outlined">{onIcon}</span>
       </button>
     ) : (
-      <button className="action-button" onClick={start}>
+      <button className="action-button" onClick={start} disabled={disabled}>
         <span className="material-symbols-outlined">{offIcon}</span>
       </button>
-    ),
+    )
 );
 
 function ControlTray({
@@ -61,11 +72,14 @@ function ControlTray({
   children,
   onVideoStreamChange = () => {},
   supportsVideo,
+  supportsScreenShare,
+  onError,
 }: ControlTrayProps) {
   const videoStreams = [useWebcam(), useScreenCapture()];
-  const [activeVideoStream, setActiveVideoStream] =
-    useState<MediaStream | null>(null);
+  const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null);
   const [webcam, screenCapture] = videoStreams;
+  const isMobile = isMobileDevice();
+
   const [inVolume, setInVolume] = useState(0);
   const [audioRecorder] = useState(() => new AudioRecorder());
   const [muted, setMuted] = useState(false);
@@ -144,17 +158,31 @@ function ControlTray({
 
   //handler for swapping from one video-stream to the next
   const changeStreams = (next?: UseMediaStreamResult) => async () => {
-    if (next) {
-      const mediaStream = await next.start();
-      setActiveVideoStream(mediaStream);
-      onVideoStreamChange(mediaStream);
-    } else {
-      setActiveVideoStream(null);
-      onVideoStreamChange(null);
-    }
+    try {
+      if (next) {
+        // 如果是屏幕共享且不支持，阻止操作
+        if (next === screenCapture && !supportsScreenShare) {
+          onError?.(new Error('getDisplayMedia not supported'));
+          return;
+        }
+        const mediaStream = await next.start();
+        setActiveVideoStream(mediaStream);
+        onVideoStreamChange(mediaStream);
+      } else {
+        setActiveVideoStream(null);
+        onVideoStreamChange(null);
+      }
 
-    videoStreams.filter((msr) => msr !== next).forEach((msr) => msr.stop());
+      videoStreams.filter((msr) => msr !== next).forEach((msr) => msr.stop());
+    } catch (error) {
+      if (error instanceof Error) {
+        onError?.(error);
+      } else {
+        onError?.(new Error('Unknown error occurred'));
+      }
+    }
   };
+
 
   return (
     <section className="control-tray">
@@ -176,23 +204,24 @@ function ControlTray({
         </div>
 
         {supportsVideo && (
-          <>
-            <MediaStreamButton
-              isStreaming={screenCapture.isStreaming}
-              start={changeStreams(screenCapture)}
-              stop={changeStreams()}
-              onIcon="cancel_presentation"
-              offIcon="present_to_all"
-            />
-            <MediaStreamButton
-              isStreaming={webcam.isStreaming}
-              start={changeStreams(webcam)}
-              stop={changeStreams()}
-              onIcon="videocam_off"
-              offIcon="videocam"
-            />
-          </>
-        )}
+        <>
+          <MediaStreamButton
+            isStreaming={screenCapture.isStreaming}
+            start={changeStreams(screenCapture)}
+            stop={changeStreams()}
+            onIcon="cancel_presentation"
+            offIcon="present_to_all"
+            disabled={!supportsScreenShare || isMobile}
+          />
+          <MediaStreamButton
+            isStreaming={webcam.isStreaming}
+            start={changeStreams(webcam)}
+            stop={changeStreams()}
+            onIcon="videocam_off"
+            offIcon="videocam"
+          />
+        </>
+      )}
         {children}
       </nav>
 

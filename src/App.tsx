@@ -36,38 +36,47 @@ function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   // either the screen capture, the video or null, if null we hide it
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+// 添加屏幕共享支持检测
+const supportsScreenShare = useRef(
+  typeof navigator.mediaDevices?.getDisplayMedia === 'function'
+);
 
-  return (
-    <div className="App">
-      <LiveAPIProvider url={uri} apiKey={API_KEY}>
-        <div className="streaming-console">
-          <SidePanel />
-          <main>
-            <div className="main-app-area">
-              {/* APP goes here */}
-              <Altair />
-              <video
-                className={cn("stream", {
-                  hidden: !videoRef.current || !videoStream,
-                })}
-                ref={videoRef}
-                autoPlay
-                playsInline
-              />
-            </div>
+return (
+  <div className="App">
+    <LiveAPIProvider url={uri} apiKey={API_KEY}>
+      <div className="streaming-console">
+        <SidePanel />
+        <main>
+          <div className="main-app-area">
+            <Altair />
+            <video
+              className={cn("stream", {
+                hidden: !videoRef.current || !videoStream,
+              })}
+              ref={videoRef}
+              autoPlay
+              playsInline
+            />
+          </div>
 
-            <ControlTray
-              videoRef={videoRef}
-              supportsVideo={true}
-              onVideoStreamChange={setVideoStream}
-            >
-              {/* put your own buttons here */}
-            </ControlTray>
-          </main>
-        </div>
-      </LiveAPIProvider>
-    </div>
-  );
+          <ControlTray
+            videoRef={videoRef}
+            supportsVideo={true}
+            supportsScreenShare={supportsScreenShare.current}
+            onVideoStreamChange={setVideoStream}
+            onError={(error: Error) => {
+              if (error.message.includes('getDisplayMedia')) {
+                alert('您的设备不支持屏幕共享功能。此功能仅支持桌面端浏览器。');
+              } else {
+                alert(`发生错误: ${error.message}`);
+              }
+            }}
+          />
+        </main>
+      </div>
+    </LiveAPIProvider>
+  </div>
+);
 }
 
 export default App;
