@@ -57,11 +57,19 @@ type MediaStreamButtonProps = {
 const MediaStreamButton = memo(
   ({ isStreaming, onIcon, offIcon, start, stop, disabled }: MediaStreamButtonProps) =>
     isStreaming ? (
-      <button className="action-button" onClick={stop}>
+      <button 
+        className="action-button" 
+        onClick={stop}
+      >
         <span className="material-symbols-outlined">{onIcon}</span>
       </button>
     ) : (
-      <button className="action-button" onClick={start} disabled={disabled}>
+      <button 
+        className="action-button tooltip" 
+        onClick={start} 
+        disabled={disabled}
+        data-tooltip={disabled ? "此功能在移动设备上不可用" : ""}
+      >
         <span className="material-symbols-outlined">{offIcon}</span>
       </button>
     )
@@ -172,17 +180,27 @@ function ControlTray({
         setActiveVideoStream(null);
         onVideoStreamChange(null);
       }
-
+  
       videoStreams.filter((msr) => msr !== next).forEach((msr) => msr.stop());
     } catch (error) {
       if (error instanceof Error) {
+        // 处理用户取消屏幕共享的情况
+        if (
+          error.name === 'NotAllowedError' || 
+          error.message.includes('Permission denied') ||
+          error.message.includes('Permission dismissed')
+        ) {
+          console.log('用户取消了屏幕共享');
+          // 用户取消时不显示错误提示
+          return;
+        }
+        // 其他错误正常处理
         onError?.(error);
       } else {
         onError?.(new Error('Unknown error occurred'));
       }
     }
   };
-
 
   return (
     <section className="control-tray">
